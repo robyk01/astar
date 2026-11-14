@@ -29,7 +29,7 @@ def step_cost(
     max_slope_deg: float = 20.0,
 ) -> float | None:
     """
-    Computes Δh = dem[nr, nc] - dem[r, c] and directional slope angle θ.
+    Computes Δh = dem[nr, nc] - dem[r, c] (run) and directional slope angle θ (rise).
     Returns None (impassable cliff) if θ > max_slope_deg; otherwise returns weighted step cost.
     """
     delta_h = float(dem[nr, nc] - dem[r, c])

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASTAR — Jezero Crater</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #050507;
+      color: #f5f5f7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .tabular { font-variant-numeric: tabular-nums; }
+    canvas#elevationChart { width: 100%; height: 64px; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+    }
+    select option { background: #111114; color: #f5f5f7; }
+  </style>
+</head>
+<body class="relative h-screen w-screen select-none">
+
+  <!-- Full-Screen 3D Canvas -->
+  <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+  <!-- Top-Left Minimal Brand Pill -->
+  <div class="pointer-events-none absolute top-5 left-5 z-10">
+    <div class="pointer-events-auto inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-black/50 px-4 py-2 backdrop-blur-2xl shadow-2xl">
+      <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+      <span class="text-xs font-semibold tracking-tight text-white">ASTAR</span>
+      <span class="text-xs text-white/30">|</span>
+      <span class="text-xs text-white/60">Jezero Crater</span>
+    </div>
+  </div>
+
+  <!-- Top-Center Apple-Style Segmented Control -->
+  <div class="pointer-events-none absolute top-5 left-1/2 -translate-x-1/2 z-10">
+    <div class="pointer-events-auto inline-flex items-center rounded-full border border-white/10 bg-black/50 p-1 backdrop-blur-2xl shadow-2xl">
+      <button id="btn-layer-orbital" class="rounded-full bg-white text-black px-3.5 py-1 text-xs font-medium transition">Orbital</button>
+      <button id="btn-layer-slope" class="rounded-full text-white/60 hover:text-white px-3.5 py-1 text-xs font-medium transition">Slope Risk</button>
+    </div>
+  </div>
+
+  <!-- Left Floating Mission Panel -->
+  <aside class="absolute top-20 left-5 z-10 w-[290px] max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-2xl border border-white/10 bg-black/50 p-4 backdrop-blur-2xl shadow-2xl space-y-4">
+
+    <!-- Waypoints -->
+    <div class="space-y-3">
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label class="text-[11px] font-medium text-white/50">Origin</label>
+          <button id="btn-pick-start" class="text-[11px] text-white/60 hover:text-white transition">Pick on map</button>
+        </div>
+        <select id="select-start" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-white/30 transition"></select>
+        <div id="coord-start" class="text-[10px] text-white/35 mt-1 tabular"></div>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center mb-1">
+          <label class="text-[11px] font-medium text-white/50">Destination</label>
+          <button id="btn-pick-goal" class="text-[11px] text-white/60 hover:text-white transition">Pick on map</button>
+        </div>
+        <select id="select-goal" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-white/30 transition"></select>
+        <div id="coord-goal" class="text-[10px] text-white/35 mt-1 tabular"></div>
+      </div>
+
+      <div class="pt-1">
+        <div class="flex justify-between text-[11px] mb-2">
+          <span class="text-white/50">Max Slope</span>
+          <span id="slope-val" class="tabular text-white/90 font-medium">20°</span>
+        </div>
+        <input id="input-slope" type="range" min="10" max="25" step="1" value="20" class="w-full" />
+      </div>
+    </div>
+
+    <!-- Primary Actions -->
+    <div class="space-y-1.5 pt-1">
+      <button id="btn-compute" class="w-full rounded-xl bg-white hover:bg-white/90 py-2 text-xs font-semibold text-black transition">
+        Compute Route
+      </button>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button id="btn-abort" class="rounded-xl bg-white/5 hover:bg-white/10 py-1.5 text-[11px] font-medium text-white/70 hover:text-white transition">
+          Abort to Hab
+        </button>
+        <button id="btn-reset" class="rounded-xl bg-white/5 hover:bg-white/10 py-1.5 text-[11px] font-medium text-white/70 hover:text-white transition">
+          Reset
+        </button>
+      </div>
+    </div>
+
+    <!-- Subtle Status -->
+    <div id="status-box" class="hidden rounded-xl px-3 py-2 text-[11px]"></div>
+
+    <!-- Minimalist Telemetry -->
+    <div id="telemetry-card" class="hidden border-t border-white/10 pt-3.5 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] font-medium text-white/50">EVA Telemetry</span>
+        <span id="badge-feasible" class="text-[10px] font-medium"></span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-y-2.5 gap-x-3">
+        <div>
+          <div class="text-[10px] text-white/40">Distance</div>
+          <div id="tel-dist" class="tabular text-sm font-medium text-white">--</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-white/40">Duration</div>
+          <div id="tel-time" class="tabular text-sm font-medium text-white">--</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-white/40">Climb</div>
+          <div id="tel-climb" class="tabular text-sm font-medium text-white">--</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-white/40">Max Slope</div>
+          <div id="tel-slope" class="tabular text-sm font-medium text-white">--</div>
+        </div>
+      </div>
+
+      <!-- Hairline Bars -->
+      <div class="space-y-2 pt-0.5">
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-white/50">O₂ Burn (1-Way · 45% max)</span>
+            <span id="tel-o2" class="tabular text-white/80">0%</span>
+          </div>
+          <div class="h-[2px] w-full rounded-full bg-white/10 overflow-hidden">
+            <div id="bar-o2" class="h-full bg-sky-400 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-white/50">Battery Burn (1-Way · 45% max)</span>
+            <span id="tel-bat" class="tabular text-white/80">0%</span>
+          </div>
+          <div class="h-[2px] w-full rounded-full bg-white/10 overflow-hidden">
+            <div id="bar-bat" class="h-full bg-emerald-400 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimal Elevation Sparkline -->
+      <div class="pt-1">
+        <div class="text-[10px] text-white/40 mb-1.5">Elevation Profile</div>
+        <canvas id="elevationChart" class="rounded-lg bg-white/[0.03]"></canvas>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Subtle Bottom-Right Hint -->
+  <div class="pointer-events-none absolute bottom-5 right-5 z-10 text-[11px] text-white/35">
+    Drag to orbit · Right-drag to pan · Scroll to zoom
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -3,10 +3,12 @@ FastAPI backend for ASTAR (Autonomous Surface Traversal & Astronaut Routing).
 """
 
 import io
+from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from PIL import Image
 
@@ -165,3 +167,7 @@ def compute_route(req: RouteRequest):
         "elevations": elevations,
         "telemetry": telemetry,
     }
+
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
