@@ -88,6 +88,25 @@ class TestPlannerAndTelemetry(unittest.TestCase):
         self.assertAlmostEqual(uphill_stats["elevation_gain_m"], 20.0, places=2)
         print('\n')
 
+    def test6_insufficient_return_resources(self):
+        """A long steep traverse (>45% O2 or battery one-way) must flag round_trip_feasible=False."""
+        # 500 steps x 20m = ~10 km steep uphill climb (+1.5m per 20m step)
+        n_steps = 500
+        dem = np.zeros((1, n_steps), dtype=np.float32)
+        for col in range(n_steps):
+            dem[0, col] = col * 1.5
+        path = [(0, c) for c in range(n_steps)]
+
+        stats = compute_eva_telemetry(path, dem)
+        print(
+            f"\n  [Resource Limit] Dist: {stats['distance_m']/1000:.2f} km | "
+            f"O2: {stats['o2_used_pct']:.1f}% | Bat: {stats['battery_used_pct']:.1f}% | "
+            f"Round-trip feasible: {stats['round_trip_feasible']}"
+        )
+        self.assertGreater(stats["o2_used_pct"], 45.0)
+        self.assertFalse(stats["round_trip_feasible"])
+        print('\n')
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
