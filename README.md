@@ -3,6 +3,9 @@
 **NASA Space Apps Challenge 2026 · Interplanetary Survival Guide: Martian Map**  
 Interactive 3D Jezero Crater EVA path planner combining real NASA orbital terrain data, classical computer vision hazard detection, weighted A* routing, simulated PLSS life-support telemetry, and OpenCLIP ground-level terrain classification.
 
+* **Live Demo Video (1:20 with voice-over):** [Watch on Canva](https://www.canva.com/d/3FYDcN3AEMiYiLg)
+* **6-Slide Pitch Deck:** [View Presentation on Canva](https://www.canva.com/d/E4Rdpu_s8jDWUW4)
+
 ---
 
 ## Key Features
