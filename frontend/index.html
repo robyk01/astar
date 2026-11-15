@@ -74,8 +74,11 @@
     </div>
     <div id="fpv-bar" class="hidden pointer-events-auto flex items-center gap-2.5 rounded-full border border-white/10 bg-black/65 px-3 py-1.5 backdrop-blur-2xl shadow-xl">
       <button id="btn-fpv-play" type="button" class="rounded-full bg-white/15 hover:bg-white/25 px-2.5 py-0.5 text-[11px] font-medium text-white transition cursor-pointer">Pause</button>
-      <input id="input-fpv-progress" type="range" min="0" max="100" value="0" class="w-28" />
+      <input id="input-fpv-progress" type="range" min="0" max="100" value="0" class="w-24" />
       <span id="fpv-pct" class="tabular text-[10px] text-white/60 w-7 text-right">0%</span>
+      <span class="text-white/20">|</span>
+      <input id="input-fpv-speed" type="range" min="0.5" max="3" step="0.5" value="1" class="w-14" title="Flythrough speed" />
+      <span id="fpv-speed-val" class="tabular text-[10px] text-white/60 w-6">1x</span>
     </div>
   </div>
 
@@ -203,8 +206,9 @@
       <button id="btn-inspect-close" class="text-xs text-white/40 hover:text-white px-1.5 py-0.5">✕</button>
     </div>
 
-    <div class="relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-[4/3]">
-      <img id="inspect-img" src="" alt="Perseverance surface view" class="h-full w-full object-cover transition-opacity duration-300 opacity-100" />
+    <div class="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] aspect-[4/3]">
+      <div id="inspect-placeholder" class="flex h-full w-full items-center justify-center text-[11px] text-white/35">Loading Perseverance view...</div>
+      <img id="inspect-img" src="" alt="" class="hidden h-full w-full object-cover transition-opacity duration-300 opacity-100" />
     </div>
 
     <div class="space-y-1">
@@ -228,6 +232,6 @@
     Drag to orbit · Right-drag to pan · Scroll to zoom
   </div>
 
-  <script type="module" src="/app.js?v=8"></script>
+  <script type="module" src="/app.js?v=12"></script>
 </body>
 </html>

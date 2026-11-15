@@ -43,6 +43,7 @@ export class MarsScene {
     this.cameraMode = 'orbit'; // 'orbit' | 'fpv'
     this.fpvProgress = 0;
     this.fpvPlaying = false;
+    this.fpvSpeed = 1.0;
     this.lastFrameTime = performance.now();
     this.onFpvProgress = null;
     this._smoothCamPos = new THREE.Vector3();
@@ -188,7 +189,7 @@ export class MarsScene {
     if (start) {
       const p = this.gridToWorld(start.row, start.col);
       this.startMarker.position.copy(p);
-      this.startMarker.visible = true;
+      this.startMarker.visible = this.cameraMode === 'orbit';
     }
     if (goal) {
       const p = this.gridToWorld(goal.row, goal.col);
@@ -249,6 +250,8 @@ export class MarsScene {
       this.fpvPlaying = true;
       this._fpvInitialized = false;
       this.roverMarker.visible = false;
+      this.startMarker.visible = false;
+      this.goalMarker.visible = this.fpvProgress < 0.93;
       this.camera.fov = 78;
       this.camera.updateProjectionMatrix();
     } else {
@@ -256,6 +259,8 @@ export class MarsScene {
       this.fpvPlaying = false;
       this.controls.enabled = true;
       this.roverMarker.visible = !!this.routeCurve;
+      this.startMarker.visible = true;
+      this.goalMarker.visible = true;
       this.camera.fov = 50;
       this.camera.position.set(0, 140, 170);
       this.controls.target.set(0, 0, 0);
@@ -272,6 +277,10 @@ export class MarsScene {
     this.fpvProgress = Math.max(0, Math.min(1, t));
   }
 
+  setFpvSpeed(speed) {
+    this.fpvSpeed = Math.max(0.25, Math.min(4, Number(speed) || 1.0));
+  }
+
   _animate() {
     requestAnimationFrame(() => this._animate());
     const now = performance.now();
@@ -280,7 +289,7 @@ export class MarsScene {
 
     if (this.cameraMode === 'fpv' && this.camCurve) {
       if (this.fpvPlaying) {
-        this.fpvProgress += dt * 0.065;
+        this.fpvProgress += dt * 0.065 * this.fpvSpeed;
         if (this.fpvProgress >= 1) {
           this.fpvProgress = 1;
           this.fpvPlaying = false;
@@ -288,10 +297,15 @@ export class MarsScene {
         if (this.onFpvProgress) this.onFpvProgress(this.fpvProgress, this.fpvPlaying);
       }
 
-      const t = this.fpvProgress;
+      const t = Math.min(0.99, this.fpvProgress);
+      this.startMarker.visible = false;
+      this.goalMarker.visible = t < 0.93;
       const pos = this.camCurve.getPointAt(t);
-      const lookT = Math.min(1, t + 0.08);
-      const lookPos = this.camCurve.getPointAt(lookT);
+      const tangent = this.camCurve.getTangentAt(t).normalize();
+      const lookPos =
+        t + 0.08 <= 1.0
+          ? this.camCurve.getPointAt(t + 0.08)
+          : pos.clone().addScaledVector(tangent, 12.0);
 
       const targetCamPos = new THREE.Vector3(pos.x, pos.y + 2.6, pos.z);
       const targetLook = new THREE.Vector3(lookPos.x, lookPos.y + 1.2, lookPos.z);
@@ -300,7 +314,7 @@ export class MarsScene {
         this._smoothCamPos.copy(targetCamPos);
         this._smoothCamLook.copy(targetLook);
         this._fpvInitialized = true;
-      } else {
+      } else if (this.fpvPlaying || this.fpvProgress < 1) {
         const alpha = 1 - Math.exp(-5.0 * dt);
         this._smoothCamPos.lerp(targetCamPos, alpha);
         this._smoothCamLook.lerp(targetLook, alpha);

@@ -179,8 +179,45 @@ def classify_rover_image(image_path: Path) -> list[dict[str, Any]]:
     return results
 
 
-def inspect_waypoint(waypoint_id: str | None = None, row: int = 580, col: int = 620) -> dict[str, Any]:
-    """Fetch a real Perseverance image for a waypoint/coordinate and classify terrain via CLIP."""
+def inspect_waypoint(
+    waypoint_id: str | None = None,
+    row: int = 580,
+    col: int = 620,
+    terrain_class: str = "bedrock",
+    slope_deg: float = 0.0,
+    sand_risk: float = 0.0,
+    boulder_risk: float = 0.0,
+) -> dict[str, Any]:
+    """Match orbital terrain hazard at (row, col) to verified Perseverance imagery and run CLIP."""
+    refs_path = CACHE_DIR / "refs.json"
+    if refs_path.exists():
+        refs = json.loads(refs_path.read_text())
+        if terrain_class in refs:
+            ref = refs[terrain_class]
+            local_img = CACHE_DIR / ref["file"]
+            scores = classify_rover_image(local_img)
+            top = scores[0]
+            advisories = {
+                "bedrock": "Nominal traction expected; consolidated bedrock supports EVA traversal.",
+                "sand": "Caution: fine regolith ripples detected; monitor boot/wheel sinkage.",
+                "boulders": "High obstacle density; route deviations recommended around rock fields.",
+                "scarp": "Steep relief ahead; verify DEM slope constraints before committing.",
+            }
+            return {
+                "sol": ref.get("sol"),
+                "camera": ref.get("camera", "MCZ"),
+                "title": ref.get("title", "Perseverance Reference"),
+                "date_taken": ref.get("date_taken", ""),
+                "image_url": f"/api/rover-image/{local_img.name}",
+                "model": "OpenCLIP ViT-B-32 (zero-shot)",
+                "orbital_class": terrain_class,
+                "orbital_stats": f"Slope {slope_deg:.1f}° · Sand {sand_risk:.2f} · Rock {boulder_risk:.2f}",
+                "top_class": top["label"],
+                "top_risk": top["risk"],
+                "advisory": advisories.get(top["id"], ""),
+                "scores": scores,
+            }
+
     if waypoint_id and waypoint_id in WAYPOINT_PAGES:
         page = WAYPOINT_PAGES[waypoint_id]
     else:
@@ -205,6 +242,8 @@ def inspect_waypoint(waypoint_id: str | None = None, row: int = 580, col: int = 
         "date_taken": meta["date_taken"],
         "image_url": f"/api/rover-image/{local_img.name}",
         "model": "OpenCLIP ViT-B-32 (zero-shot)",
+        "orbital_class": terrain_class,
+        "orbital_stats": f"Slope {slope_deg:.1f}° · Sand {sand_risk:.2f} · Rock {boulder_risk:.2f}",
         "top_class": top["label"],
         "top_risk": top["risk"],
         "advisory": advisories.get(top["id"], ""),

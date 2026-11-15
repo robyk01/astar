@@ -1,4 +1,4 @@
-import { MarsScene } from './scene3d.js?v=8';
+import { MarsScene } from './scene3d.js?v=12';
 
 const container = document.getElementById('canvas-container');
 const selectStart = document.getElementById('select-start');
@@ -15,7 +15,9 @@ let startPt = null;
 let goalPt = null;
 let pickMode = null;
 let lastRoutePath = [];
-let lastFpvBucket = -1;
+let lastRouteClasses = [];
+let lastShownClass = null;
+let lastInspectAt = 0;
 let inspectSeq = 0;
 
 const scene = new MarsScene(container, (row, col) => {
@@ -97,7 +99,8 @@ async function computeRoute() {
 
     statusBox.classList.add('hidden');
     lastRoutePath = data.path;
-    lastFpvBucket = -1;
+    lastRouteClasses = data.terrain_classes || [];
+    lastShownClass = null;
     scene.renderRoute(data.path, data.elevations);
     drawElevationChart(data.elevations);
 
@@ -279,6 +282,8 @@ const fpvBar = document.getElementById('fpv-bar');
 const btnFpvPlay = document.getElementById('btn-fpv-play');
 const inputFpvProgress = document.getElementById('input-fpv-progress');
 const fpvPct = document.getElementById('fpv-pct');
+const inputFpvSpeed = document.getElementById('input-fpv-speed');
+const fpvSpeedVal = document.getElementById('fpv-speed-val');
 
 const activeCamTab = 'rounded-full bg-white text-black px-3 py-1 text-xs font-medium transition';
 const idleCamTab = 'rounded-full text-white/60 hover:text-white px-3 py-1 text-xs font-medium transition';
@@ -320,7 +325,13 @@ inputFpvProgress.addEventListener('input', () => {
   const t = Number(inputFpvProgress.value) / 100;
   scene.setFpvProgress(t);
   fpvPct.textContent = `${inputFpvProgress.value}%`;
-  syncFpvCheckpoint(t, false);
+  syncFpvCheckpoint(t, true);
+});
+
+inputFpvSpeed.addEventListener('input', () => {
+  const s = Number(inputFpvSpeed.value);
+  scene.setFpvSpeed(s);
+  fpvSpeedVal.textContent = `${s}x`;
 });
 
 scene.onFpvProgress = (t, playing) => {
@@ -343,6 +354,7 @@ scene.onFpvProgress = (t, playing) => {
 const inspectCard = document.getElementById('inspect-card');
 const inspectMeta = document.getElementById('inspect-meta');
 const inspectImg = document.getElementById('inspect-img');
+const inspectPlaceholder = document.getElementById('inspect-placeholder');
 const inspectTopClass = document.getElementById('inspect-top-class');
 const inspectRiskBadge = document.getElementById('inspect-risk-badge');
 const inspectAdvisory = document.getElementById('inspect-advisory');
@@ -372,6 +384,8 @@ async function inspectCoord(row, col, wpId = '', checkpointLabel = '') {
       const pre = new Image();
       pre.onload = () => {
         if (seq !== inspectSeq) return;
+        inspectPlaceholder.classList.add('hidden');
+        inspectImg.classList.remove('hidden');
         inspectImg.style.opacity = '0';
         setTimeout(() => {
           if (seq !== inspectSeq) return;
@@ -382,8 +396,8 @@ async function inspectCoord(row, col, wpId = '', checkpointLabel = '') {
       pre.src = data.image_url;
     }
 
-    const prefix = checkpointLabel ? `${checkpointLabel} · ` : '';
-    inspectMeta.textContent = `${prefix}Sol ${data.sol ?? '?'} · ${data.camera}`;
+    const prefix = checkpointLabel ? `${checkpointLabel} · ` : 'Orbital Match · ';
+    inspectMeta.textContent = `${prefix}Sol ${data.sol ?? '?'} · ${data.orbital_stats || data.camera}`;
     inspectTopClass.textContent = data.top_class;
     inspectRiskBadge.textContent = data.top_risk;
     inspectAdvisory.textContent = data.advisory;
@@ -429,16 +443,33 @@ async function inspectCoord(row, col, wpId = '', checkpointLabel = '') {
 
 function syncFpvCheckpoint(t, force = false) {
   if (!lastRoutePath || lastRoutePath.length === 0) return;
-  const bucket = Math.min(4, Math.floor(t * 5));
-  if (!force && bucket === lastFpvBucket) return;
-  lastFpvBucket = bucket;
   const idx = Math.min(
     lastRoutePath.length - 1,
-    Math.round((bucket / 4) * (lastRoutePath.length - 1))
+    Math.round(t * (lastRoutePath.length - 1))
   );
+
+  // 9-step local majority vote prevents single-pixel flicker
+  const counts = {};
+  const lo = Math.max(0, idx - 4);
+  const hi = Math.min(lastRouteClasses.length - 1, idx + 4);
+  let cls = lastRouteClasses[idx] || 'bedrock';
+  let bestCount = 0;
+  for (let i = lo; i <= hi; i++) {
+    const c = lastRouteClasses[i] || 'bedrock';
+    counts[c] = (counts[c] || 0) + 1;
+    if (counts[c] > bestCount) {
+      bestCount = counts[c];
+      cls = c;
+    }
+  }
+
+  const now = Date.now();
+  if (!force && (cls === lastShownClass || now - lastInspectAt < 1200)) return;
+  lastShownClass = cls;
+  lastInspectAt = now;
   const [r, c] = lastRoutePath[idx];
-  const pctLabels = ['0%', '25%', '50%', '75%', '100%'];
-  inspectCoord(r, c, '', `Traverse ${pctLabels[bucket]}`);
+  const pct = Math.round(t * 100);
+  inspectCoord(r, c, '', `Live (${pct}%)`);
 }
 
 document.getElementById('btn-inspect').addEventListener('click', () => {

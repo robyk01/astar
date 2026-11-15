@@ -178,6 +178,19 @@ def get_hazard_texture():
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
+def _classify_cell(r: int, c: int) -> str:
+    slope_val = float(SLOPE_DEG[r, c])
+    sand_val = float(SAND_RISK[r, c])
+    boulder_val = float(BOULDER_RISK[r, c])
+    if slope_val >= 11.0:
+        return "scarp"
+    if sand_val >= 0.35 and sand_val >= boulder_val:
+        return "sand"
+    if boulder_val >= 0.35:
+        return "boulders"
+    return "bedrock"
+
+
 @app.post("/api/route")
 def compute_route(req: RouteRequest):
     for name, r, c in [
@@ -198,20 +211,37 @@ def compute_route(req: RouteRequest):
         raise HTTPException(status_code=404, detail="No safe route found under slope constraint")
 
     elevations = [round(float(DEM[r, c]), 2) for r, c in path]
+    terrain_classes = [_classify_cell(r, c) for r, c in path]
     telemetry = compute_eva_telemetry(path, DEM, pixel_scale=PIXEL_SCALE_METERS)
 
     return {
         "steps": len(path),
         "path": path,
         "elevations": elevations,
+        "terrain_classes": terrain_classes,
         "telemetry": telemetry,
     }
 
 
 @app.get("/api/waypoint-inspect")
 def api_waypoint_inspect(waypoint_id: str | None = None, row: int = 580, col: int = 620):
+    r = max(0, min(ROWS - 1, row))
+    c = max(0, min(COLS - 1, col))
+    slope_val = float(SLOPE_DEG[r, c])
+    sand_val = float(SAND_RISK[r, c])
+    boulder_val = float(BOULDER_RISK[r, c])
+    terrain_class = _classify_cell(r, c)
+
     try:
-        return inspect_waypoint(waypoint_id=waypoint_id, row=row, col=col)
+        return inspect_waypoint(
+            waypoint_id=waypoint_id,
+            row=r,
+            col=c,
+            terrain_class=terrain_class,
+            slope_deg=slope_val,
+            sand_risk=sand_val,
+            boulder_risk=boulder_val,
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Rover inspection failed: {exc}")
 
