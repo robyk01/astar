@@ -1,4 +1,4 @@
-import { MarsScene } from './scene3d.js?v=12';
+import { MarsScene } from './scene3d.js?v=13';
 
 const container = document.getElementById('canvas-container');
 const selectStart = document.getElementById('select-start');
@@ -92,6 +92,7 @@ async function computeRoute() {
         goal_col: goalPt.col,
         max_slope_deg: Number(inputSlope.value),
         use_cv_hazard: document.getElementById('toggle-cv').checked,
+        compare_shortest: document.getElementById('toggle-compare').checked,
       }),
     });
     const data = await res.json();
@@ -102,10 +103,28 @@ async function computeRoute() {
     lastRouteClasses = data.terrain_classes || [];
     lastShownClass = null;
     scene.renderRoute(data.path, data.elevations);
+    if (data.baseline) {
+      scene.renderBaselineRoute(data.baseline.path, data.baseline.elevations);
+    } else {
+      scene.renderBaselineRoute(null, null);
+    }
     drawElevationChart(data.elevations);
 
     const t = data.telemetry;
     telemetryCard.classList.remove('hidden');
+
+    const compareBox = document.getElementById('compare-summary');
+    if (data.baseline) {
+      const bt = data.baseline.telemetry;
+      const dDist = ((t.distance_m - bt.distance_m) / 1000).toFixed(2);
+      const sign = t.distance_m >= bt.distance_m ? '+' : '';
+      compareBox.innerHTML =
+        `<span class="font-semibold text-cyan-300">Cyan (Safe)</span> vs <span class="font-semibold text-orange-300">Orange (Shortest)</span><br>` +
+        `Detour: ${sign}${dDist} km · Max Slope: ${t.max_slope_deg.toFixed(1)}° vs ${bt.max_slope_deg.toFixed(1)}°`;
+      compareBox.classList.remove('hidden');
+    } else {
+      compareBox.classList.add('hidden');
+    }
     document.getElementById('tel-dist').textContent = `${(t.distance_m / 1000).toFixed(2)} km`;
     document.getElementById('tel-time').textContent = `${t.duration_min.toFixed(0)} min`;
     document.getElementById('tel-climb').textContent = `+${t.elevation_gain_m.toFixed(0)} m`;
@@ -274,6 +293,7 @@ document.getElementById('btn-layer-orbital').addEventListener('click', () => set
 document.getElementById('btn-layer-slope').addEventListener('click', () => setLayerTab('btn-layer-slope', '/api/slope-texture'));
 document.getElementById('btn-layer-cv').addEventListener('click', () => setLayerTab('btn-layer-cv', '/api/hazard-texture'));
 document.getElementById('toggle-cv').addEventListener('change', computeRoute);
+document.getElementById('toggle-compare').addEventListener('change', computeRoute);
 
 // --- Camera Mode (Orbit vs First-Person Traverse) ---
 const btnCamOrbit = document.getElementById('btn-cam-orbit');

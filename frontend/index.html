@@ -117,6 +117,10 @@
         <span class="text-[11px] text-white/70">Avoid Sand / Boulders (CV)</span>
         <input id="toggle-cv" type="checkbox" checked class="h-3.5 w-3.5 accent-white rounded cursor-pointer" />
       </label>
+      <label class="flex items-center justify-between pt-0.5 cursor-pointer">
+        <span class="text-[11px] text-white/70">Compare Shortest Path</span>
+        <input id="toggle-compare" type="checkbox" class="h-3.5 w-3.5 accent-orange-400 rounded cursor-pointer" />
+      </label>
     </div>
 
     <!-- Primary Actions -->
@@ -165,6 +169,8 @@
           <div id="tel-slope" class="tabular text-sm font-medium text-white">--</div>
         </div>
       </div>
+
+      <div id="compare-summary" class="hidden rounded-xl border border-orange-400/20 bg-orange-500/10 px-2.5 py-2 text-[10px] leading-relaxed text-orange-200/90 tabular"></div>
 
       <!-- Hairline Bars -->
       <div class="space-y-2 pt-0.5">
@@ -232,6 +238,6 @@
     Drag to orbit · Right-drag to pan · Scroll to zoom
   </div>
 
-  <script type="module" src="/app.js?v=12"></script>
+  <script type="module" src="/app.js?v=13"></script>
 </body>
 </html>

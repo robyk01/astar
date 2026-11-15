@@ -38,6 +38,7 @@ export class MarsScene {
 
     this.terrainMesh = null;
     this.routeLine = null;
+    this.baselineLine = null;
     this.routeCurve = null;
     this.camCurve = null;
     this.cameraMode = 'orbit'; // 'orbit' | 'fpv'
@@ -241,6 +242,26 @@ export class MarsScene {
     const tubeMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
     this.routeLine = new THREE.Mesh(tubeGeo, tubeMat);
     this.scene.add(this.routeLine);
+  }
+
+  renderBaselineRoute(path, elevations) {
+    if (this.baselineLine) {
+      this.scene.remove(this.baselineLine);
+      this.baselineLine.geometry.dispose();
+      this.baselineLine = null;
+    }
+    if (!path || path.length < 2) return;
+
+    const points = path.map(([r, c], idx) => {
+      const p = this.gridToWorld(r, c, elevations[idx]);
+      p.y += 0.35;
+      return p;
+    });
+    const curve = new THREE.CatmullRomCurve3(points);
+    const tubeGeo = new THREE.TubeGeometry(curve, Math.min(points.length * 2, 500), 0.30, 6, false);
+    const tubeMat = new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.78 });
+    this.baselineLine = new THREE.Mesh(tubeGeo, tubeMat);
+    this.scene.add(this.baselineLine);
   }
 
   setCameraMode(mode) {

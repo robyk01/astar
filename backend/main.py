@@ -83,6 +83,7 @@ class RouteRequest(BaseModel):
     goal_col: int
     max_slope_deg: float = 20.0
     use_cv_hazard: bool = True
+    compare_shortest: bool = False
 
 
 @app.get("/api/health")
@@ -214,12 +215,31 @@ def compute_route(req: RouteRequest):
     terrain_classes = [_classify_cell(r, c) for r, c in path]
     telemetry = compute_eva_telemetry(path, DEM, pixel_scale=PIXEL_SCALE_METERS)
 
+    baseline = None
+    if req.compare_shortest:
+        base_path = astar(
+            DEM,
+            (req.start_row, req.start_col),
+            (req.goal_row, req.goal_col),
+            hazard_mask=None,
+            max_slope_deg=45.0,
+        )
+        if base_path:
+            base_elevs = [round(float(DEM[r, c]), 2) for r, c in base_path]
+            base_tel = compute_eva_telemetry(base_path, DEM, pixel_scale=PIXEL_SCALE_METERS)
+            baseline = {
+                "path": base_path,
+                "elevations": base_elevs,
+                "telemetry": base_tel,
+            }
+
     return {
         "steps": len(path),
         "path": path,
         "elevations": elevations,
         "terrain_classes": terrain_classes,
         "telemetry": telemetry,
+        "baseline": baseline,
     }
 
 
