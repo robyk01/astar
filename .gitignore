@@ -27,8 +27,9 @@ pnpm-debug.log*
 *.key
 *.pem
 
-# Large Raw Planetary Data (keep processed lightweight assets)
+# Large Raw Planetary Data & Rover Cache
 data/raw/
+data/rover_cache/
 *.tif
 *.tiff
 *.img

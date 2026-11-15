@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+numpy
+scipy
+pillow
+rasterio
+requests
+torch
+open-clip-torch
+pydantic
