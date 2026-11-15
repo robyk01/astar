@@ -6,6 +6,11 @@ Interactive 3D Jezero Crater EVA path planner combining real NASA orbital terrai
 * **Live Demo Video (1:20 with voice-over):** [Watch on Canva](https://www.canva.com/d/3FYDcN3AEMiYiLg)
 * **6-Slide Pitch Deck:** [View Presentation on Canva](https://www.canva.com/d/E4Rdpu_s8jDWUW4)
 
+### Interface Preview
+| Surface Hazard + Dual-Route Comparison | Orbital Jezero Crater (3D CTX) | First-Person + Ground Recon |
+| :---: | :---: | :---: |
+| ![Surface Hazard Comparison](docs/screenshots/01_surface_hazard_compare.jpg) | ![Orbital Jezero Crater](docs/screenshots/02_orbital_jezero.jpg) | ![First-Person Slope Risk](docs/screenshots/03_first_person_slope.jpg) |
+
 ---
 
 ## Key Features
