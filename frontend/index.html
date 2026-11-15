@@ -62,6 +62,20 @@
     <div class="pointer-events-auto inline-flex items-center rounded-full border border-white/10 bg-black/50 p-1 backdrop-blur-2xl shadow-2xl">
       <button id="btn-layer-orbital" class="rounded-full bg-white text-black px-3.5 py-1 text-xs font-medium transition">Orbital</button>
       <button id="btn-layer-slope" class="rounded-full text-white/60 hover:text-white px-3.5 py-1 text-xs font-medium transition">Slope Risk</button>
+      <button id="btn-layer-cv" class="rounded-full text-white/60 hover:text-white px-3.5 py-1 text-xs font-medium transition">Surface Hazard</button>
+    </div>
+  </div>
+
+  <!-- Top-Right Camera Mode Pill -->
+  <div class="pointer-events-none absolute top-5 right-5 z-20 flex flex-col items-end gap-2">
+    <div class="pointer-events-auto inline-flex items-center rounded-full border border-white/10 bg-black/50 p-1 backdrop-blur-2xl shadow-2xl">
+      <button id="btn-cam-orbit" type="button" class="rounded-full bg-white text-black px-3 py-1 text-xs font-medium transition">Orbit</button>
+      <button id="btn-cam-fpv" type="button" class="rounded-full text-white/60 hover:text-white px-3 py-1 text-xs font-medium transition">First-Person</button>
+    </div>
+    <div id="fpv-bar" class="hidden pointer-events-auto flex items-center gap-2.5 rounded-full border border-white/10 bg-black/65 px-3 py-1.5 backdrop-blur-2xl shadow-xl">
+      <button id="btn-fpv-play" type="button" class="rounded-full bg-white/15 hover:bg-white/25 px-2.5 py-0.5 text-[11px] font-medium text-white transition cursor-pointer">Pause</button>
+      <input id="input-fpv-progress" type="range" min="0" max="100" value="0" class="w-28" />
+      <span id="fpv-pct" class="tabular text-[10px] text-white/60 w-7 text-right">0%</span>
     </div>
   </div>
 
@@ -95,6 +109,11 @@
         </div>
         <input id="input-slope" type="range" min="10" max="25" step="1" value="20" class="w-full" />
       </div>
+
+      <label class="flex items-center justify-between pt-1 cursor-pointer">
+        <span class="text-[11px] text-white/70">Avoid Sand / Boulders (CV)</span>
+        <input id="toggle-cv" type="checkbox" checked class="h-3.5 w-3.5 accent-white rounded cursor-pointer" />
+      </label>
     </div>
 
     <!-- Primary Actions -->
@@ -110,6 +129,9 @@
           Reset
         </button>
       </div>
+      <button id="btn-inspect" class="w-full rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-1.5 text-[11px] font-medium text-white/80 hover:text-white transition">
+        Inspect Ground (NASA + CLIP)
+      </button>
     </div>
 
     <!-- Subtle Status -->
@@ -171,11 +193,41 @@
     </div>
   </aside>
 
+  <!-- Right Floating Perseverance + CLIP Ground Inspection Card -->
+  <aside id="inspect-card" class="hidden absolute top-28 right-5 z-10 w-[290px] rounded-2xl border border-white/10 bg-black/55 p-4 backdrop-blur-2xl shadow-2xl space-y-3">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-[11px] font-semibold text-white">Perseverance Ground Recon</div>
+        <div id="inspect-meta" class="text-[10px] text-white/45">Loading NASA Mars 2020...</div>
+      </div>
+      <button id="btn-inspect-close" class="text-xs text-white/40 hover:text-white px-1.5 py-0.5">✕</button>
+    </div>
+
+    <div class="relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-[4/3]">
+      <img id="inspect-img" src="" alt="Perseverance surface view" class="h-full w-full object-cover transition-opacity duration-300 opacity-100" />
+    </div>
+
+    <div class="space-y-1">
+      <div class="flex items-center justify-between">
+        <span id="inspect-top-class" class="text-xs font-semibold text-white">--</span>
+        <span id="inspect-risk-badge" class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/85">--</span>
+      </div>
+      <p id="inspect-advisory" class="text-[11px] leading-relaxed text-white/60"></p>
+    </div>
+
+    <div id="inspect-bars" class="space-y-2 border-t border-white/10 pt-2.5"></div>
+  </aside>
+
+  <!-- Dynamic Layer Color Legend -->
+  <div id="layer-legend" class="hidden pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 z-10">
+    <div id="legend-items" class="inline-flex items-center gap-4 rounded-full border border-white/10 bg-black/55 px-4 py-1.5 text-[11px] text-white/80 backdrop-blur-2xl shadow-xl"></div>
+  </div>
+
   <!-- Subtle Bottom-Right Hint -->
   <div class="pointer-events-none absolute bottom-5 right-5 z-10 text-[11px] text-white/35">
     Drag to orbit · Right-drag to pan · Scroll to zoom
   </div>
 
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/app.js?v=8"></script>
 </body>
 </html>

@@ -38,6 +38,24 @@ export class MarsScene {
 
     this.terrainMesh = null;
     this.routeLine = null;
+    this.routeCurve = null;
+    this.camCurve = null;
+    this.cameraMode = 'orbit'; // 'orbit' | 'fpv'
+    this.fpvProgress = 0;
+    this.fpvPlaying = false;
+    this.lastFrameTime = performance.now();
+    this.onFpvProgress = null;
+    this._smoothCamPos = new THREE.Vector3();
+    this._smoothCamLook = new THREE.Vector3();
+    this._fpvInitialized = false;
+
+    this.roverMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.95, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    this.roverMarker.visible = false;
+    this.scene.add(this.roverMarker);
+
     this.waypointGroup = new THREE.Group();
     this.scene.add(this.waypointGroup);
 
@@ -207,15 +225,92 @@ export class MarsScene {
     });
 
     const curve = new THREE.CatmullRomCurve3(points);
+    this.routeCurve = curve;
+
+    // Coarser spline for jitter-free first-person camera glide
+    const camPts = points.filter((_, i) => i === 0 || i === points.length - 1 || i % 6 === 0);
+    this.camCurve = camPts.length >= 2 ? new THREE.CatmullRomCurve3(camPts) : curve;
+
+    this.fpvProgress = 0;
+    this._fpvInitialized = false;
+    this.roverMarker.position.copy(points[0]);
+    this.roverMarker.visible = this.cameraMode === 'orbit';
+
     const tubeGeo = new THREE.TubeGeometry(curve, Math.min(points.length * 2, 600), 0.45, 6, false);
     const tubeMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
     this.routeLine = new THREE.Mesh(tubeGeo, tubeMat);
     this.scene.add(this.routeLine);
   }
 
+  setCameraMode(mode) {
+    this.cameraMode = mode;
+    if (mode === 'fpv' && this.routeCurve) {
+      this.controls.enabled = false;
+      this.fpvPlaying = true;
+      this._fpvInitialized = false;
+      this.roverMarker.visible = false;
+      this.camera.fov = 78;
+      this.camera.updateProjectionMatrix();
+    } else {
+      this.cameraMode = 'orbit';
+      this.fpvPlaying = false;
+      this.controls.enabled = true;
+      this.roverMarker.visible = !!this.routeCurve;
+      this.camera.fov = 50;
+      this.camera.position.set(0, 140, 170);
+      this.controls.target.set(0, 0, 0);
+      this.camera.updateProjectionMatrix();
+      this.controls.update();
+    }
+  }
+
+  setFpvPlaying(playing) {
+    this.fpvPlaying = playing;
+  }
+
+  setFpvProgress(t) {
+    this.fpvProgress = Math.max(0, Math.min(1, t));
+  }
+
   _animate() {
     requestAnimationFrame(() => this._animate());
-    this.controls.update();
+    const now = performance.now();
+    const dt = Math.min((now - this.lastFrameTime) / 1000, 0.1);
+    this.lastFrameTime = now;
+
+    if (this.cameraMode === 'fpv' && this.camCurve) {
+      if (this.fpvPlaying) {
+        this.fpvProgress += dt * 0.065;
+        if (this.fpvProgress >= 1) {
+          this.fpvProgress = 1;
+          this.fpvPlaying = false;
+        }
+        if (this.onFpvProgress) this.onFpvProgress(this.fpvProgress, this.fpvPlaying);
+      }
+
+      const t = this.fpvProgress;
+      const pos = this.camCurve.getPointAt(t);
+      const lookT = Math.min(1, t + 0.08);
+      const lookPos = this.camCurve.getPointAt(lookT);
+
+      const targetCamPos = new THREE.Vector3(pos.x, pos.y + 2.6, pos.z);
+      const targetLook = new THREE.Vector3(lookPos.x, lookPos.y + 1.2, lookPos.z);
+
+      if (!this._fpvInitialized) {
+        this._smoothCamPos.copy(targetCamPos);
+        this._smoothCamLook.copy(targetLook);
+        this._fpvInitialized = true;
+      } else {
+        const alpha = 1 - Math.exp(-5.0 * dt);
+        this._smoothCamPos.lerp(targetCamPos, alpha);
+        this._smoothCamLook.lerp(targetLook, alpha);
+      }
+
+      this.camera.position.copy(this._smoothCamPos);
+      this.camera.lookAt(this._smoothCamLook);
+    } else {
+      this.controls.update();
+    }
     this.renderer.render(this.scene, this.camera);
   }
 }

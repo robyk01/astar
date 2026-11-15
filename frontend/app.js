@@ -1,4 +1,4 @@
-import { MarsScene } from './scene3d.js';
+import { MarsScene } from './scene3d.js?v=8';
 
 const container = document.getElementById('canvas-container');
 const selectStart = document.getElementById('select-start');
@@ -14,6 +14,9 @@ let waypoints = [];
 let startPt = null;
 let goalPt = null;
 let pickMode = null;
+let lastRoutePath = [];
+let lastFpvBucket = -1;
+let inspectSeq = 0;
 
 const scene = new MarsScene(container, (row, col) => {
   if (!pickMode) return;
@@ -86,12 +89,15 @@ async function computeRoute() {
         goal_row: goalPt.row,
         goal_col: goalPt.col,
         max_slope_deg: Number(inputSlope.value),
+        use_cv_hazard: document.getElementById('toggle-cv').checked,
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Route calculation failed');
 
     statusBox.classList.add('hidden');
+    lastRoutePath = data.path;
+    lastFpvBucket = -1;
     scene.renderRoute(data.path, data.elevations);
     drawElevationChart(data.elevations);
 
@@ -223,16 +229,223 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 const activeTab = 'rounded-full bg-white text-black px-3.5 py-1 text-xs font-medium transition';
 const idleTab = 'rounded-full text-white/60 hover:text-white px-3.5 py-1 text-xs font-medium transition';
 
-document.getElementById('btn-layer-orbital').addEventListener('click', () => {
-  scene.setTexture('/api/texture');
-  document.getElementById('btn-layer-orbital').className = activeTab;
-  document.getElementById('btn-layer-slope').className = idleTab;
+const legendBox = document.getElementById('layer-legend');
+const legendItems = document.getElementById('legend-items');
+
+const LEGENDS = {
+  'btn-layer-orbital': null,
+  'btn-layer-slope': [
+    { color: '#2ecc71', label: '< 8° Safe' },
+    { color: '#f1c40f', label: '8°–15° Caution' },
+    { color: '#e74c3c', label: '> 15° Hazard' },
+  ],
+  'btn-layer-cv': [
+    { color: '#dc2626', label: 'Imminent Danger' },
+    { color: '#f59e0b', label: 'Sand Trap' },
+    { color: '#a855f7', label: 'Boulder / Rough' },
+    { color: '#262e3d', label: 'Safe Bedrock' },
+  ],
+};
+
+function setLayerTab(activeId, textureUrl) {
+  scene.setTexture(textureUrl);
+  ['btn-layer-orbital', 'btn-layer-slope', 'btn-layer-cv'].forEach((id) => {
+    document.getElementById(id).className = id === activeId ? activeTab : idleTab;
+  });
+
+  const items = LEGENDS[activeId];
+  if (!items) {
+    legendBox.classList.add('hidden');
+  } else {
+    legendItems.innerHTML = items
+      .map(
+        (it) =>
+          `<span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full" style="background:${it.color}"></span><span>${it.label}</span></span>`
+      )
+      .join('');
+    legendBox.classList.remove('hidden');
+  }
+}
+
+document.getElementById('btn-layer-orbital').addEventListener('click', () => setLayerTab('btn-layer-orbital', '/api/texture'));
+document.getElementById('btn-layer-slope').addEventListener('click', () => setLayerTab('btn-layer-slope', '/api/slope-texture'));
+document.getElementById('btn-layer-cv').addEventListener('click', () => setLayerTab('btn-layer-cv', '/api/hazard-texture'));
+document.getElementById('toggle-cv').addEventListener('change', computeRoute);
+
+// --- Camera Mode (Orbit vs First-Person Traverse) ---
+const btnCamOrbit = document.getElementById('btn-cam-orbit');
+const btnCamFpv = document.getElementById('btn-cam-fpv');
+const fpvBar = document.getElementById('fpv-bar');
+const btnFpvPlay = document.getElementById('btn-fpv-play');
+const inputFpvProgress = document.getElementById('input-fpv-progress');
+const fpvPct = document.getElementById('fpv-pct');
+
+const activeCamTab = 'rounded-full bg-white text-black px-3 py-1 text-xs font-medium transition';
+const idleCamTab = 'rounded-full text-white/60 hover:text-white px-3 py-1 text-xs font-medium transition';
+
+async function setCameraUI(mode) {
+  if (mode === 'fpv') {
+    if (!scene.routeCurve) {
+      await computeRoute();
+    }
+    if (!scene.routeCurve) return;
+    btnCamOrbit.className = idleCamTab;
+    btnCamFpv.className = activeCamTab;
+    fpvBar.classList.remove('hidden');
+    btnFpvPlay.textContent = 'Pause';
+    scene.setCameraMode(mode);
+    syncFpvCheckpoint(scene.fpvProgress, true);
+  } else {
+    btnCamOrbit.className = activeCamTab;
+    btnCamFpv.className = idleCamTab;
+    fpvBar.classList.add('hidden');
+    scene.setCameraMode(mode);
+  }
+}
+
+btnCamOrbit.addEventListener('click', () => setCameraUI('orbit'));
+btnCamFpv.addEventListener('click', () => setCameraUI('fpv'));
+
+btnFpvPlay.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const next = !scene.fpvPlaying;
+  if (next && scene.fpvProgress >= 0.99) scene.setFpvProgress(0);
+  scene.setFpvPlaying(next);
+  btnFpvPlay.textContent = next ? 'Pause' : 'Play';
 });
 
-document.getElementById('btn-layer-slope').addEventListener('click', () => {
-  scene.setTexture('/api/slope-texture');
-  document.getElementById('btn-layer-slope').className = activeTab;
-  document.getElementById('btn-layer-orbital').className = idleTab;
+inputFpvProgress.addEventListener('input', () => {
+  scene.setFpvPlaying(false);
+  btnFpvPlay.textContent = 'Play';
+  const t = Number(inputFpvProgress.value) / 100;
+  scene.setFpvProgress(t);
+  fpvPct.textContent = `${inputFpvProgress.value}%`;
+  syncFpvCheckpoint(t, false);
+});
+
+scene.onFpvProgress = (t, playing) => {
+  const pct = Math.round(t * 100);
+  if (inputFpvProgress.value !== String(pct)) {
+    inputFpvProgress.value = pct;
+  }
+  const pctStr = `${pct}%`;
+  if (fpvPct.textContent !== pctStr) {
+    fpvPct.textContent = pctStr;
+  }
+  const playLabel = playing ? 'Pause' : 'Play';
+  if (btnFpvPlay.textContent !== playLabel) {
+    btnFpvPlay.textContent = playLabel;
+  }
+  syncFpvCheckpoint(t, false);
+};
+
+// --- NASA Perseverance + CLIP Ground Inspection ---
+const inspectCard = document.getElementById('inspect-card');
+const inspectMeta = document.getElementById('inspect-meta');
+const inspectImg = document.getElementById('inspect-img');
+const inspectTopClass = document.getElementById('inspect-top-class');
+const inspectRiskBadge = document.getElementById('inspect-risk-badge');
+const inspectAdvisory = document.getElementById('inspect-advisory');
+const inspectBars = document.getElementById('inspect-bars');
+
+document.getElementById('btn-inspect-close').addEventListener('click', () => {
+  inspectCard.classList.add('hidden');
+});
+
+async function inspectCoord(row, col, wpId = '', checkpointLabel = '') {
+  const seq = ++inspectSeq;
+  inspectCard.classList.remove('hidden');
+  inspectMeta.textContent = checkpointLabel
+    ? `${checkpointLabel} · Fetching NASA Perseverance...`
+    : 'Fetching NASA Perseverance & classifying...';
+
+  const qs = new URLSearchParams({ row: String(row), col: String(col) });
+  if (wpId) qs.set('waypoint_id', wpId);
+
+  try {
+    const res = await fetch(`/api/waypoint-inspect?${qs.toString()}`);
+    const data = await res.json();
+    if (seq !== inspectSeq) return; // Ignore stale out-of-order response
+    if (!res.ok) throw new Error(data.detail || 'Inspection failed');
+
+    if (inspectImg.getAttribute('src') !== data.image_url) {
+      const pre = new Image();
+      pre.onload = () => {
+        if (seq !== inspectSeq) return;
+        inspectImg.style.opacity = '0';
+        setTimeout(() => {
+          if (seq !== inspectSeq) return;
+          inspectImg.src = data.image_url;
+          inspectImg.style.opacity = '1';
+        }, 160);
+      };
+      pre.src = data.image_url;
+    }
+
+    const prefix = checkpointLabel ? `${checkpointLabel} · ` : '';
+    inspectMeta.textContent = `${prefix}Sol ${data.sol ?? '?'} · ${data.camera}`;
+    inspectTopClass.textContent = data.top_class;
+    inspectRiskBadge.textContent = data.top_risk;
+    inspectAdvisory.textContent = data.advisory;
+
+    const barColors = {
+      bedrock: 'bg-emerald-400',
+      sand: 'bg-amber-400',
+      boulders: 'bg-purple-400',
+      scarp: 'bg-rose-400',
+    };
+
+    if (!inspectBars.children.length) {
+      inspectBars.innerHTML = data.scores
+        .map((s) => {
+          const pct = Math.round(s.probability * 100);
+          const color = barColors[s.id] || 'bg-white';
+          return `
+            <div data-cls="${s.id}">
+              <div class="flex justify-between text-[10px] mb-1">
+                <span class="cls-label text-white/75">${s.label}</span>
+                <span class="cls-pct tabular text-white/60">${pct}%</span>
+              </div>
+              <div class="h-[3px] w-full rounded-full bg-white/10 overflow-hidden">
+                <div class="cls-bar h-full ${color} transition-all duration-500 ease-out" style="width:${pct}%"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    } else {
+      data.scores.forEach((s) => {
+        const rowEl = inspectBars.querySelector(`[data-cls="${s.id}"]`);
+        if (!rowEl) return;
+        const pct = Math.round(s.probability * 100);
+        rowEl.querySelector('.cls-pct').textContent = `${pct}%`;
+        rowEl.querySelector('.cls-bar').style.width = `${pct}%`;
+      });
+    }
+  } catch (err) {
+    if (seq === inspectSeq) inspectMeta.textContent = err.message;
+  }
+}
+
+function syncFpvCheckpoint(t, force = false) {
+  if (!lastRoutePath || lastRoutePath.length === 0) return;
+  const bucket = Math.min(4, Math.floor(t * 5));
+  if (!force && bucket === lastFpvBucket) return;
+  lastFpvBucket = bucket;
+  const idx = Math.min(
+    lastRoutePath.length - 1,
+    Math.round((bucket / 4) * (lastRoutePath.length - 1))
+  );
+  const [r, c] = lastRoutePath[idx];
+  const pctLabels = ['0%', '25%', '50%', '75%', '100%'];
+  inspectCoord(r, c, '', `Traverse ${pctLabels[bucket]}`);
+}
+
+document.getElementById('btn-inspect').addEventListener('click', () => {
+  if (!goalPt) return;
+  const wpIdx = selectGoal.value;
+  const wpId = wpIdx !== 'custom' && waypoints[Number(wpIdx)] ? waypoints[Number(wpIdx)].id : '';
+  inspectCoord(goalPt.row, goalPt.col, wpId);
 });
 
 init();
